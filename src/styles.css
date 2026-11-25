@@ -235,3 +235,29 @@ main { display: grid; grid-template-columns: minmax(560px, 1fr) 470px; gap: 22px
 .sbtn.danger { background: #A33A22; color: #fff; }
 button:focus { outline: none; }
 button:focus-visible { outline: 3px solid rgba(200,138,90,.4); outline-offset: 2px; }
+
+/* thông báo mở trên máy tính */
+.gate { position: fixed; inset: 0; z-index: 200; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 24px 18px;
+  background: radial-gradient(120% 80% at 50% 0%, #1F3A66 0%, var(--navy) 45%, var(--ink) 100%); color: #fff; }
+.gate-card { width: 100%; max-width: 440px; text-align: center; }
+.gate-logo { width: min(240px, 62vw); display: block; margin: 0 auto 34px; }
+.gate-ic { width: 84px; height: 84px; margin: 0 auto 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(226,177,132,.12); box-shadow: inset 0 0 0 1.5px rgba(226,177,132,.45); color: var(--cl); }
+.gate-ic svg { width: 40px; height: 40px; }
+.gate h1 { margin: 0 0 12px; font-size: 22px; letter-spacing: .01em; }
+.gate p { margin: 0 auto 26px; color: #D7CCBB; font-size: 15px; line-height: 1.65; max-width: 380px; }
+.gate p b { color: var(--cl); }
+.gate-btn { display: inline-flex; align-items: center; gap: 9px; height: 48px; padding: 0 22px; border-radius: 10px; background: linear-gradient(180deg, #D49A69, #BD7E4E); color: #fff; font-weight: 700; font-size: 15px; box-shadow: 0 8px 22px rgba(200,138,90,.35); }
+.gate-btn svg { width: 18px; height: 18px; }
+.gate-foot { margin-top: 40px; font-size: 12px; color: rgba(215,204,187,.6); line-height: 1.5; }
+
+.gate-acts { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.gate-btn { min-width: 260px; justify-content: center; }
+.gate-btn.line { background: rgba(255,255,255,.04); box-shadow: inset 0 0 0 1.5px var(--cl); color: var(--cl); letter-spacing: .08em; font-size: 14px; }
+.gate-about .modal-bg { z-index: 250; }
+.gate-about .modal { color: var(--text); text-align: left; }
+@media (max-width: 560px) {
+  .modal.about dl { grid-template-columns: 1fr; padding: 6px 20px 2px; }
+  .modal.about dt { padding: 12px 0 2px; border-bottom: 0; }
+  .modal.about dd { padding: 0 0 12px; }
+  .modal.about dl > :nth-last-child(2) { border-bottom: 0; }
+}

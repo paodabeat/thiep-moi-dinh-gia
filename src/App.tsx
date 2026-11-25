@@ -98,7 +98,7 @@ const ABOUT: [string, React.ReactNode][] = [
   ['Liên hệ và hỗ trợ', <a href="https://paodabeat-profile.vercel.app/" target="_blank" rel="noopener noreferrer">paodabeat-profile.vercel.app<Icon.Ext /></a>],
   ['Bản quyền thuộc', 'Công ty Cổ phần The Moneyverse Việt Nam'],
 ];
-const AboutModal: React.FC<{onClose: () => void}> = ({onClose}) => (
+export const AboutModal: React.FC<{onClose: () => void}> = ({onClose}) => (
   <div className="modal-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
     <div className="modal about">
       <div className="mh">THÔNG TIN HỖ TRỢ<button onClick={onClose} title="Đóng"><Icon.Close /></button></div>
