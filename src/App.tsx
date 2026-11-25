@@ -8,6 +8,7 @@ import type {Guest} from './remotion/scenes/data';
 import {Work, cfgFor, guestLabel, saveLocal, exportSettings, importSettings, imageToDataUrl, downloadBlob} from './store';
 import {VIDEO_COMP, JobState, runExport, Target, renderPreview, enqueue} from './exporter';
 import {Icon} from './icons';
+import {DialogHost, ask, confirmBox} from './dialog';
 
 /* ---------- 6 cảnh của thiệp ---------- */
 export const SCENES = [
@@ -81,6 +82,7 @@ export const App: React.FC<{initial: Work}> = ({initial}) => {
 
       {showExport && <ExportModal work={work} job={job} setJob={setJob} onClose={() => setShowExport(false)} say={say} />}
       {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
+      <DialogHost />
       {toast && <div className={'toast' + (toast.err ? ' err' : '')}>{toast.m}</div>}
     </div>
   );
@@ -143,7 +145,14 @@ const GuestTab: React.FC<{work: Work; setWork: React.Dispatch<React.SetStateActi
       if (body.length && /danh|xưng|xung/i.test(String(body[0][0]))) body.shift();
       const list = body.map((r) => ({danhXung: String(r[0]).trim(), hoTen: String(r[1]).trim(), chucVuDonVi: String(r[2]).trim()})).filter((x) => x.hoTen);
       if (!list.length) throw new Error('Không tìm thấy khách mời nào trong file');
-      const replace = work.guests.length <= 1 && !work.guests[0]?.hoTen ? true : confirm(`Đã đọc ${list.length} khách mời.\n\nOK = thay danh sách hiện tại\nHuỷ = thêm vào cuối danh sách`);
+      const empty = work.guests.length <= 1 && !work.guests[0]?.hoTen;
+      const mode = empty ? 'replace' : await ask<'replace' | 'append' | null>({
+        title: `Đã đọc ${list.length} khách mời từ file`, tone: 'info', cancelValue: null,
+        message: <>Danh sách hiện có <b>{work.guests.length}</b> khách. Bạn muốn thay toàn bộ danh sách hay thêm các khách mới vào cuối?</>,
+        actions: [{label: 'Huỷ', value: null, kind: 'ghost'}, {label: 'Thêm vào cuối', value: 'append', kind: 'ghost', icon: <Icon.Plus />}, {label: 'Thay danh sách', value: 'replace', icon: <Icon.Reset />}],
+      });
+      if (!mode) return;
+      const replace = mode === 'replace';
       setWork((w) => ({...w, guests: replace ? list : [...w.guests, ...list], sel: replace ? 0 : w.guests.length}));
       say(`Đã nhập ${list.length} khách mời`);
     } catch (e: any) { say(e.message, true); }
@@ -172,7 +181,7 @@ const GuestTab: React.FC<{work: Work; setWork: React.Dispatch<React.SetStateActi
       </div>
       <div className="acts" style={{marginTop: 10}}>
         <button className="sbtn ghost" onClick={add}><Icon.Plus />Thêm khách mời</button>
-        <button className="sbtn ghost" onClick={() => confirm('Xoá toàn bộ danh sách khách mời?') && setWork((w) => ({...w, guests: [{danhXung: 'Ông', hoTen: '', chucVuDonVi: ''}], sel: 0}))}><Icon.Trash />Xoá danh sách</button>
+        <button className="sbtn ghost" onClick={async () => (await confirmBox('Xoá toàn bộ danh sách?', <>Toàn bộ <b>{work.guests.length}</b> khách mời sẽ bị xoá khỏi danh sách. Nên bấm <b>LƯU CÀI ĐẶT</b> trước nếu cần giữ lại.</>, 'Xoá danh sách', 'danger')) && setWork((w) => ({...w, guests: [{danhXung: 'Ông', hoTen: '', chucVuDonVi: ''}], sel: 0}))}><Icon.Trash />Xoá danh sách</button>
       </div>
     </Card>
   </>);
@@ -429,10 +438,45 @@ const ExportModal: React.FC<{work: Work; job: JobState | null; setJob: React.Dis
     return () => { dead = true; };
   }, [pcfg, running]);
 
-  const pickDir = async () => { try { setDir(await (window as any).showDirectoryPicker({mode: 'readwrite', id: 'thiep-moi'})); } catch { /* huỷ */ } };
+  const pickDir = async () => {
+    // giải thích trước, vì sau đó trình duyệt bắt buộc hiện hộp hỏi quyền của chính nó (không thể thay thế)
+    const go = await ask<boolean>({
+      title: 'Lưu thiệp thẳng vào một thư mục', tone: 'info', cancelValue: false,
+      message: <>
+        <p>Sau khi bấm <b>Chọn thư mục</b>, bạn sẽ thấy hai cửa sổ của trình duyệt:</p>
+        <ol><li>Cửa sổ chọn thư mục trên máy – chọn nơi muốn lưu thiệp.</li><li>Câu hỏi <i>“Cho phép trang web này chỉnh sửa tệp?”</i> – bấm <b>Cho phép</b>.</li></ol>
+        <p className="dim">Trang chỉ ghi thêm các file thiệp mới vào thư mục đó, không đọc, sửa hay xoá file nào khác.</p>
+      </>,
+      actions: [{label: 'Huỷ', value: false, kind: 'ghost'}, {label: 'Chọn thư mục', value: true, icon: <Icon.Folder />}],
+    });
+    if (!go) return;
+    try {
+      const h = await (window as any).showDirectoryPicker({mode: 'readwrite', id: 'thiep-moi'});
+      const perm = await h.queryPermission?.({mode: 'readwrite'});
+      if (perm && perm !== 'granted' && (await h.requestPermission?.({mode: 'readwrite'})) !== 'granted') throw new Error('denied');
+      setDir(h);
+    } catch (e: any) {
+      if (e?.name === 'AbortError') return; // người dùng đóng cửa sổ chọn thư mục
+      await ask({title: 'Chưa được cấp quyền lưu', tone: 'warn', cancelValue: true,
+        message: <>Trình duyệt chưa cho phép trang lưu vào thư mục này. Thiệp sẽ được lưu vào <b>thư mục Tải xuống</b> như mặc định. Bạn có thể bấm <b>Chọn thư mục…</b> để thử lại và chọn <b>Cho phép</b>.</>,
+        actions: [{label: 'Đã hiểu', value: true}]});
+    }
+  };
   const start = async () => {
     if (!mp4 && !png) return say('Chọn ít nhất một định dạng', true);
     if (!list.length) return say('Danh sách khách mời đang trống', true);
+    if (!dir && list.length * per > 1) {
+      const go = await ask<'go' | 'dir' | null>({
+        title: `Tải ${list.length * per} file về thư mục Tải xuống`, tone: 'info', cancelValue: null,
+        message: <>
+          <p>Trình duyệt có thể hỏi <i>“Cho phép tải xuống nhiều tệp?”</i> – hãy bấm <b>Cho phép</b> để nhận đủ các file.</p>
+          {canPickFolder && <p className="dim">Mẹo: chọn một thư mục riêng để thiệp được lưu gọn vào đó, không lẫn với file tải xuống khác.</p>}
+        </>,
+        actions: [{label: 'Huỷ', value: null, kind: 'ghost'}, ...(canPickFolder ? [{label: 'Chọn thư mục', value: 'dir' as const, kind: 'ghost' as const, icon: <Icon.Folder />}] : []), {label: 'Bắt đầu xuất', value: 'go', icon: <Icon.Download />}],
+      });
+      if (!go) return;
+      if (go === 'dir') return pickDir();
+    }
     const target: Target = dir ? {kind: 'folder', dir} : {kind: 'download'};
     const ac = new AbortController(); abort.current = ac;
     setRes(null);
@@ -488,7 +532,7 @@ const ExportModal: React.FC<{work: Work; job: JobState | null; setJob: React.Dis
             <h4>NƠI LƯU FILE</h4>
             {canPickFolder ? (
               <div className="dir">
-                <Icon.Folder /><span>{dir ? dir.name : 'Thư mục Tải xuống (Downloads)'}</span>
+                {dir ? <Icon.FolderOk /> : <Icon.Folder />}<span>{dir ? dir.name : 'Thư mục Tải xuống (Downloads)'}</span>
                 <button className="sbtn ghost" disabled={running} onClick={pickDir}>Chọn thư mục…</button>
               </div>
             ) : <p className="note">File sẽ được tải về thư mục Tải xuống của trình duyệt.</p>}

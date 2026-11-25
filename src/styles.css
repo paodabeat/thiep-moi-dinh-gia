@@ -214,3 +214,24 @@ main { display: grid; grid-template-columns: minmax(560px, 1fr) 470px; gap: 22px
 .modal.about a:hover { text-decoration: underline; }
 .modal.about a .ic { width: 14px; }
 .about-foot { padding: 12px 26px 18px; font-size: 12px; color: var(--mute); text-align: center; background: #FBF5EA; border-top: 1px solid #EFE4D3; }
+
+/* hộp thoại riêng của trang */
+.dlg-bg { z-index: 90; }
+.dlg { width: 460px; max-width: 100%; background: var(--cream); border-radius: 16px; padding: 26px 26px 22px; box-shadow: 0 30px 90px rgba(0,0,0,.35); text-align: center; animation: pop .16s ease-out; }
+@keyframes pop { from { transform: scale(.96); opacity: 0; } }
+.dlg-ic { width: 54px; height: 54px; margin: 0 auto 14px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--navy); color: var(--cl); }
+.dlg-ic .ic { width: 26px; }
+.dlg.warn .dlg-ic { background: #F6E3CC; color: #B0661F; }
+.dlg.danger .dlg-ic { background: #F5DCD5; color: #A33A22; }
+.dlg h3 { margin: 0 0 10px; font-size: 18px; color: var(--navy); }
+.dlg-msg { color: #4E4A5C; font-size: 14px; line-height: 1.6; text-align: left; }
+.dlg-msg p { margin: 0 0 10px; }
+.dlg-msg ol { margin: 0 0 10px; padding-left: 20px; }
+.dlg-msg li { margin-bottom: 4px; }
+.dlg-msg .dim { color: var(--mute); font-size: 13px; }
+.dlg-msg b { color: var(--navy); }
+.dlg-acts { display: flex; justify-content: center; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.dlg-acts .sbtn.big { min-width: 120px; }
+.sbtn.danger { background: #A33A22; color: #fff; }
+button:focus { outline: none; }
+button:focus-visible { outline: 3px solid rgba(200,138,90,.4); outline-offset: 2px; }
