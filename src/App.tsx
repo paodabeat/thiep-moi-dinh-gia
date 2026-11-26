@@ -4,7 +4,7 @@ import QRCode from 'qrcode';
 import {sf} from './remotion/sf';
 import {SLOTS} from './remotion/assets';
 import {DEFAULT_CONFIG, TemplateConfig} from './remotion/config';
-import type {Guest} from './remotion/scenes/data';
+import type {Guest, Fit} from './remotion/scenes/data';
 import {Work, cfgFor, guestLabel, saveLocal, exportSettings, importSettings, imageToDataUrl, downloadBlob} from './store';
 import {VIDEO_COMP, JobState, runExport, Target, renderPreview, enqueue, videoSupport} from './exporter';
 import {Icon} from './icons';
@@ -121,6 +121,34 @@ const Card: React.FC<{title: string; children: React.ReactNode; actions?: React.
   <div className="card"><div className="ch"><h3>{title}</h3>{actions}</div>{hint && <p className="hint">{hint}</p>}{children}</div>
 );
 
+/* ---------- tinh chỉnh cỡ chữ / vị trí khối tên ---------- */
+const Slider: React.FC<{label: string; value: number; min: number; max: number; step: number; fmt: (v: number) => string; onChange: (v: number) => void}> = ({label, value, min, max, step, fmt, onChange}) => (
+  <label className="slider">
+    <span className="sl-l">{label}</span>
+    <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(+e.target.value)}
+      style={{'--p': `${((value - min) / (max - min)) * 100}%`} as React.CSSProperties} />
+    <span className={'sl-v' + (fmt(value) === fmt(min + (max - min) / 2) ? ' def' : '')}>{fmt(value)}</span>
+  </label>
+);
+const pct = (v: number) => `${Math.round(v * 100)}%`;
+const px = (v: number) => (v === 0 ? '0' : `${v > 0 ? '↓' : '↑'} ${Math.abs(v)}px`);
+const FitPanel: React.FC<{fit: Fit | undefined; onChange: (f: Fit | undefined) => void}> = ({fit, onChange}) => {
+  const f = {name: 1, sub: 1, dy: 0, ...fit};
+  const set = (p: Partial<Fit>) => { const n = {...f, ...p}; onChange(n.name === 1 && n.sub === 1 && n.dy === 0 ? undefined : n); };
+  const custom = !!fit;
+  return (
+    <div className="fit">
+      <Slider label="Cỡ chữ tên" value={f.name} min={0.7} max={1.3} step={0.02} fmt={pct} onChange={(v) => set({name: v})} />
+      <Slider label="Cỡ chữ chức vụ – đơn vị" value={f.sub} min={0.7} max={1.3} step={0.02} fmt={pct} onChange={(v) => set({sub: v})} />
+      <Slider label="Vị trí khối tên" value={f.dy} min={-60} max={60} step={2} fmt={px} onChange={(v) => set({dy: v})} />
+      <div className="fit-foot">
+        <span>{custom ? 'Đang dùng tinh chỉnh riêng' : 'Đang tự động căn chỉnh'}</span>
+        <button className="sbtn ghost" disabled={!custom} onClick={() => onChange(undefined)}><Icon.Reset />Về mặc định</button>
+      </div>
+    </div>
+  );
+};
+
 /* ---------- TAB KHÁCH MỜI ---------- */
 const GuestTab: React.FC<{work: Work; setWork: React.Dispatch<React.SetStateAction<Work>>; say: (m: string, e?: boolean) => void}> = ({work, setWork, say}) => {
   const g = work.guests[work.sel];
@@ -158,12 +186,18 @@ const GuestTab: React.FC<{work: Work; setWork: React.Dispatch<React.SetStateActi
     } catch (e: any) { say(e.message, true); }
   };
   return (<>
-    <Card title="Khách mời đang xem trước" hint="Chỉnh trực tiếp – thiệp bên phải cập nhật ngay. Họ tên tự viết hoa trên thiệp.">
+    <Card title="Khách mời đang xem trước" hint="Chỉnh trực tiếp – thiệp bên phải cập nhật ngay. Họ tên tự viết hoa trên thiệp. Muốn tự chọn chỗ xuống dòng: gõ dấu | vào họ tên, hoặc Enter / dấu | trong ô chức vụ.">
       <div className="row">
         <Field label="Danh xưng" value={g.danhXung} onChange={(v) => setG({danhXung: v})} grow={1} />
         <Field label="Họ tên" value={g.hoTen} onChange={(v) => setG({hoTen: v})} upper grow={3} />
       </div>
-      <Field label="Chức vụ – Đơn vị" value={g.chucVuDonVi} onChange={(v) => setG({chucVuDonVi: v})} />
+      <Field label="Chức vụ – Đơn vị (Enter hoặc dấu | để xuống dòng)" area value={g.chucVuDonVi} onChange={(v) => setG({chucVuDonVi: v})} />
+    </Card>
+    <Card title="Tinh chỉnh thiệp của khách này" hint="Chỉ áp dụng cho khách đang chọn, ở cả cảnh 4 và cảnh 6.">
+      <FitPanel fit={g.fit} onChange={(fit) => setG({fit})} />
+    </Card>
+    <Card title="Tinh chỉnh chung cho mọi thiệp" hint="Áp dụng cho toàn bộ danh sách, cộng dồn với tinh chỉnh riêng của từng khách.">
+      <FitPanel fit={work.cfg.fit} onChange={(fit) => setWork((w) => ({...w, cfg: {...w.cfg, fit}}))} />
     </Card>
     <Card title={`Danh sách khách mời (${work.guests.length})`} actions={<div className="acts">
       <button className="sbtn ghost" onClick={template}><Icon.Sheet />Tải file mẫu</button>
@@ -174,7 +208,7 @@ const GuestTab: React.FC<{work: Work; setWork: React.Dispatch<React.SetStateActi
           <div key={i} className={'grow' + (i === work.sel ? ' on' : '')} onClick={() => setWork((w) => ({...w, sel: i}))}>
             <span className="no">{i + 1}</span>
             <span className="nm">{x.hoTen ? guestLabel(x) : <em>(chưa nhập tên)</em>}</span>
-            <span className="cv">{x.chucVuDonVi}</span>
+            <span className="cv">{x.chucVuDonVi.replace(/\s*[|\n]\s*/g, ' / ')}</span>
             <button className="x" title="Xoá" onClick={(e) => { e.stopPropagation(); del(i); }}><Icon.Trash /></button>
           </div>
         ))}
@@ -404,7 +438,7 @@ const GuestCombo: React.FC<{guests: Guest[]; value: Choice; onChange: (c: Choice
           <li className={'all' + (hl === 0 ? ' hl' : '')} onMouseEnter={() => setHl(0)} onClick={() => choose({all: true})}><span>Chọn tất cả</span><small>{valid.length} khách mời</small></li>
           {items.map(({g, i}, k) => (
             <li key={i} className={hl === k + 1 ? 'hl' : ''} onMouseEnter={() => setHl(k + 1)} onClick={() => choose({all: false, index: i})}>
-              <span><em>{String(i + 1).padStart(2, '0')}</em>{guestLabel(g)}</span><small>{g.chucVuDonVi}</small>
+              <span><em>{String(i + 1).padStart(2, '0')}</em>{guestLabel(g)}</span><small>{g.chucVuDonVi.replace(/\s*[|\n]\s*/g, ' / ')}</small>
             </li>
           ))}
           {!items.length && <li className="none">Không tìm thấy khách mời phù hợp</li>}

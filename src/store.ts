@@ -16,10 +16,10 @@ export const blankWork = (): Work => ({
 /** cấu hình dùng để dựng thiệp cho một khách cụ thể (họ tên luôn viết hoa) */
 export const cfgFor = (cfg: TemplateConfig, g: Guest | undefined): TemplateConfig => ({
   ...cfg,
-  guest: g ? {danhXung: g.danhXung.trim(), hoTen: g.hoTen.trim().toLocaleUpperCase('vi'), chucVuDonVi: g.chucVuDonVi.trim()} : {danhXung: '', hoTen: '', chucVuDonVi: ''},
+  guest: g ? {danhXung: g.danhXung.trim(), hoTen: g.hoTen.trim().toLocaleUpperCase('vi'), chucVuDonVi: g.chucVuDonVi.trim(), fit: g.fit} : {danhXung: '', hoTen: '', chucVuDonVi: ''},
 });
 
-export const guestLabel = (g: Guest) => `${g.danhXung} ${g.hoTen.toLocaleUpperCase('vi')}`.trim();
+export const guestLabel = (g: Guest) => `${g.danhXung} ${g.hoTen.replace(/\s*[|\n]\s*/g, ' ').toLocaleUpperCase('vi')}`.trim();
 
 export const normalize = (w: Partial<Work> | null | undefined): Work => {
   const b = blankWork();

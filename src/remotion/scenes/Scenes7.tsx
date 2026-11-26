@@ -3,7 +3,7 @@ import {measureText} from '@remotion/layout-utils';
 import React from 'react';
 import {AbsoluteFill, Img} from 'remotion';
 import {C, SERIF, SAFE} from '../theme';
-import {Logo, BrandLogo, Center, Eyebrow, Rule, GuestName, CompassRose} from '../components/Kit';
+import {Logo, BrandLogo, Center, Eyebrow, Rule, GuestName, guestNameLayout, CompassRose} from '../components/Kit';
 import {Rings, RingDefs, Seg, Spiral, SSeg} from '../components/Rings';
 import {Needle} from '../components/Soft';
 import {COPY, Guest} from './data';
@@ -366,15 +366,25 @@ const Glow: React.FC<{y: number; w: number; h: number}> = ({y, w, h}) => (
 // danh xưng / họ tên / chức vụ as one centred group, so short or long names never overlap
 // Khối khách mời: đặt từ trên xuống (luôn cách dòng "TRÂN TRỌNG KÍNH MỜI" một khoảng cố định), nội dung dài thì
 // chiếm thêm chỗ phía dưới; nếu vẫn vượt quá vùng [top, bottom] thì thu nhỏ đều cả khối cho vừa.
-const GuestBlock: React.FC<{guest: Guest; top: number; bottom: number; sizes: [number, number, number]; gaps: [number, number]}> = ({guest, top, bottom, sizes, gaps}) => {
+const GuestBlock: React.FC<{guest: Guest; top: number; bottom: number; sizes: [number, number, number]; gaps: [number, number]; dyScale?: number}> = ({guest, top: top0, bottom: bottom0, sizes: sizes0, gaps, dyScale = 1}) => {
   const maxW = 1080 - (SAFE - 40) * 2;
+  // tinh chỉnh của người dùng: chung (CFG.fit) × riêng từng khách (guest.fit)
+  const gf = CFG.fit ?? {}, pf = guest.fit ?? {};
+  const mName = (gf.name ?? 1) * (pf.name ?? 1), mSub = (gf.sub ?? 1) * (pf.sub ?? 1);
+  const dy = ((gf.dy ?? 0) + (pf.dy ?? 0)) * dyScale;
+  const top = top0 + dy, bottom = bottom0 + dy;
+  const sizes: [number, number, number] = [sizes0[0], sizes0[1] * mName, sizes0[2] * mSub];
+  // chức vụ: người dùng tự xuống dòng bằng dấu | hoặc phím Enter
+  const subLines = guest.chucVuDonVi.split(/\s*[|\n]\s*/).filter(Boolean);
   const est = (k: number) => {
     const [s0, s1, s2] = sizes.map((x) => x * k);
-    let h = s1 * 1.1;
+    // tên người (có danh xưng) luôn một dòng; tên đơn vị (không danh xưng) dài thì được tách 2 dòng
+    const nm = guestNameLayout(guest.hoTen, s1, maxW - 20, true, !guest.danhXung);
+    let h = nm.size * 1.1 * nm.lines.length;
     if (guest.danhXung) h += s0 * 1.1 + gaps[0] + s1 * 0.3;
-    if (guest.chucVuDonVi) {
-      const w = measureText({text: guest.chucVuDonVi, fontFamily: 'Google Sans Flex', fontSize: s2, fontWeight: '500'}).width;
-      h += gaps[1] + Math.max(1, Math.ceil((w * 1.04) / maxW)) * s2 * 1.25;
+    if (subLines.length) {
+      const n = subLines.reduce((a, l) => a + Math.max(1, Math.ceil((measureText({text: l, fontFamily: 'Google Sans Flex', fontSize: s2, fontWeight: '500'}).width * 1.04) / maxW)), 0);
+      h += gaps[1] + n * s2 * 1.25;
     }
     return h;
   };
@@ -382,10 +392,10 @@ const GuestBlock: React.FC<{guest: Guest; top: number; bottom: number; sizes: [n
   while (k > 0.7 && est(k) > bottom - top) k -= 0.02;
   const [s0, s1, s2] = sizes.map((x) => x * k);
   return (
-    <div style={{position: 'absolute', left: SAFE - 40, right: SAFE - 40, top, height: bottom - top, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', textAlign: 'center'}}>
+    <div style={{position: 'absolute', left: SAFE - 40, right: SAFE - 40, top, height: bottom - top, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center'}}>
       {guest.danhXung ? <div style={{fontSize: s0, fontWeight: 500, color: C.mute, lineHeight: 1.1, marginBottom: gaps[0] + s1 * 0.3}}>{guest.danhXung}</div> : null}
-      <GuestName text={guest.hoTen} max={s1} width={maxW - 20} />
-      {guest.chucVuDonVi ? <div style={{fontSize: s2, fontWeight: 500, color: C.mute, lineHeight: 1.25, marginTop: gaps[1], maxWidth: maxW, textWrap: 'balance'} as React.CSSProperties}>{guest.chucVuDonVi}</div> : null}
+      <GuestName text={guest.hoTen} max={s1} width={maxW - 20} wrap={!guest.danhXung} />
+      {subLines.length ? <div style={{fontSize: s2, fontWeight: 500, color: C.mute, lineHeight: 1.25, marginTop: gaps[1], maxWidth: maxW}}>{subLines.map((l, i) => <div key={i} style={{textWrap: 'balance'} as React.CSSProperties}>{l}</div>)}</div> : null}
     </div>
   );
 };
@@ -412,15 +422,16 @@ export const CardEvent: React.FC<{variant?: 'A' | 'B'; bare?: boolean}> = ({vari
     <Center style={{filter: 'drop-shadow(0 0 10px #F7EFE2) drop-shadow(0 0 22px #F7EFE2) drop-shadow(0 0 40px rgba(247,239,226,0.9))'}} top={290}><ShinyLogo width={390} start={375} style={{margin: '0 auto'}} /></Center>
     <Center top={490}><Eyebrow size={24}>{COPY.talkLabel}</Eyebrow><div style={{fontWeight: 700, fontSize: 54, lineHeight: 1.2, marginTop: 14, color: C.navy, whiteSpace: 'nowrap'}}>{CFG.talkLines[0]}<br />{CFG.talkLines[1]}</div></Center>
     <div style={{position: 'absolute', left: 0, right: 0, top: 765, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18}}>
-      <div style={{background: C.navy, color: C.cream, padding: '20px 40px 18px', display: 'flex', alignItems: 'center', boxShadow: '0 14px 30px rgba(19,40,74,0.22)'}}>
-        <div style={{textAlign: 'center', paddingRight: 32}}>
+      {/* cột nào không có dòng phụ (vd. bỏ trống giờ đón khách) thì số liệu tự canh giữa theo chiều dọc */}
+      <div style={{background: C.navy, color: C.cream, padding: '20px 40px 18px', display: 'flex', alignItems: 'stretch', boxShadow: '0 14px 30px rgba(19,40,74,0.22)'}}>
+        <div style={{textAlign: 'center', paddingRight: 32, display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
           <div style={{fontSize: 58, fontWeight: 800, lineHeight: 1}}>{COPY.time}</div>
-          <div style={{fontSize: 19, fontWeight: 700, letterSpacing: '0.14em', color: C.copperLight, marginTop: 9}}>{COPY.weekday}</div>
+          {COPY.weekday.trim() ? <div style={{fontSize: 19, fontWeight: 700, letterSpacing: '0.14em', color: C.copperLight, marginTop: 9}}>{COPY.weekday}</div> : null}
         </div>
         <div style={{width: 2, alignSelf: 'stretch', background: C.copper}} />
-        <div style={{textAlign: 'center', paddingLeft: 32}}>
+        <div style={{textAlign: 'center', paddingLeft: 32, display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
           <div style={{fontSize: 58, fontWeight: 800, lineHeight: 1}}>{COPY.date}</div>
-          <div style={{fontSize: 19, fontWeight: 700, letterSpacing: '0.12em', color: C.copperLight, marginTop: 9}}>{COPY.welcome.toUpperCase()}</div>
+          {COPY.welcome.trim() ? <div style={{fontSize: 19, fontWeight: 700, letterSpacing: '0.12em', color: C.copperLight, marginTop: 9}}>{COPY.welcome.toUpperCase()}</div> : null}
         </div>
       </div>
       <div style={{textAlign: 'center', lineHeight: 1.4}}>
@@ -475,15 +486,15 @@ export const CardFinal: React.FC<{guest: Guest; variant?: 'A' | 'B'; bare?: bool
     <Glow y={211} w={600} h={250} />
     <Center style={{filter: 'drop-shadow(0 0 10px #F7EFE2) drop-shadow(0 0 22px #F7EFE2) drop-shadow(0 0 40px rgba(247,239,226,0.9))'}} top={165}><BrandLogo name="vtv" height={72} style={{margin: '0 auto'}} /><div style={{height: 12}} /><Eyebrow size={22}>{COPY.vtvUnit[1]}</Eyebrow></Center>
     <Center top={316}><Eyebrow size={24} color={C.mute}>{COPY.invite}</Eyebrow></Center>
-    <GuestBlock guest={guest} top={370} bottom={616} sizes={[28, 84, 27]} gaps={[2, 6]} />
+    <GuestBlock guest={guest} top={370} bottom={616} sizes={[28, 84, 27]} gaps={[2, 6]} dyScale={0.8} />
     <Center top={631}><Eyebrow size={21}>{COPY.lead} {COPY.eventTitle}</Eyebrow></Center>
     <Center top={663}><ShinyLogo width={485} start={515} style={{margin: '0 auto'}} /></Center>
     <Center top={893}><Eyebrow size={20}>{COPY.talkLabel}</Eyebrow><div style={{fontWeight: 700, fontSize: 47, lineHeight: 1.2, marginTop: 8, color: C.navy, whiteSpace: 'nowrap'}}>{CFG.talkLines[0]}<br />{CFG.talkLines[1]}</div></Center>
     <div style={{position: 'absolute', left: SAFE + 20, right: SAFE + 20, top: 1073, background: C.navy, color: C.cream, padding: '24px 0 20px', display: 'flex', justifyContent: 'center', boxShadow: '0 14px 30px rgba(19,40,74,0.22)'}}>
       {[[COPY.time, COPY.weekday], [COPY.date, COPY.welcome.toUpperCase()]].map(([a, b], i) => (
-        <div key={i} style={{padding: '0 32px', textAlign: 'center', borderLeft: i ? `2px solid ${C.copper}` : 'none'}}>
+        <div key={i} style={{padding: '0 32px', textAlign: 'center', borderLeft: i ? `2px solid ${C.copper}` : 'none', display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
           <div style={{fontSize: 60, fontWeight: 800, lineHeight: 1, whiteSpace: 'nowrap'}}>{a}</div>
-          <div style={{fontSize: 20, fontWeight: 700, letterSpacing: '0.14em', color: C.copperLight, marginTop: 9}}>{b}</div>
+          {b.trim() ? <div style={{fontSize: 20, fontWeight: 700, letterSpacing: '0.14em', color: C.copperLight, marginTop: 9}}>{b}</div> : null}
         </div>
       ))}
     </div>

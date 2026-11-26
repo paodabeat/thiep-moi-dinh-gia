@@ -1,5 +1,7 @@
 // Fixed copy from the client brief (section 3) - do not edit wording.
-export type Guest = {danhXung: string; hoTen: string; chucVuDonVi: string};
+/** tinh chỉnh khối tên: name/sub = hệ số cỡ chữ (1 = tự động), dy = dịch lên(−)/xuống(+) theo px */
+export type Fit = {name?: number; sub?: number; dy?: number};
+export type Guest = {danhXung: string; hoTen: string; chucVuDonVi: string; fit?: Fit};
 export const defaultGuest: Guest = {danhXung: 'Ông', hoTen: 'NGUYỄN ĐỨC DŨNG', chucVuDonVi: 'Phó TGĐ Sở Giao dịch hàng hoá Việt Nam'};
 
 export const COPY = {

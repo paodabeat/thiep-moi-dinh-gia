@@ -70,14 +70,36 @@ export const Rule: React.FC<{w?: number}> = ({w = 360}) => (
   </div>
 );
 
+// Tên quá dài (vd. tên đơn vị) mà ép một dòng sẽ bị thu rất nhỏ → tách thành 2 dòng cân nhau, chữ to hơn.
+export const guestNameLayout = (text: string, max: number, width: number, ready = true, wrap = true): {lines: string[]; size: number} => {
+  const fit = (t: string) => fitText({text: t, withinWidth: width, fontFamily: SERIF, fontWeight: 700}).fontSize * 0.97;
+  // ngắt dòng thủ công bằng dấu |
+  if (/[|\n]/.test(text)) {
+    const ls = text.split(/[|\n]/).map((x) => x.trim()).filter(Boolean);
+    return {lines: ls, size: ready ? Math.min(max, ...ls.map(fit)) : max};
+  }
+  if (!ready) return {lines: [text], size: max};
+  const one = Math.min(max, fit(text));
+  const words = text.split(/\s+/);
+  // tên người thường vẫn giữ một dòng; chỉ tách khi ép một dòng phải thu nhỏ quá nhiều (tên đơn vị dài)
+  if (!wrap || one >= max * 0.66 || words.length < 3) return {lines: [text], size: one};
+  let best = {lines: [text], size: one};
+  for (let i = 1; i < words.length; i++) {
+    const a = words.slice(0, i).join(' '), b = words.slice(i).join(' ');
+    if (/^[-–—&]/.test(b)) continue; // không để dòng 2 bắt đầu bằng gạch nối
+    const sz = Math.min(max * 0.86, fit(a), fit(b));
+    if (sz > best.size) best = {lines: [a, b], size: sz};
+  }
+  return best;
+};
 // Guest name auto-fits inside the safe width so long names never touch the margins.
-export const GuestName: React.FC<{text: string; max: number; width?: number}> = ({text, max, width = W - SAFE * 2 - 40}) => {
+export const GuestName: React.FC<{text: string; max: number; width?: number; wrap?: boolean}> = ({text, max, width = W - SAFE * 2 - 40, wrap = true}) => {
   // measure only after the web fonts are loaded, otherwise the fallback font's width is used
   const [ready, setReady] = React.useState(false);
   const [handle] = React.useState(() => delayRender('guest-name-font'));
   React.useEffect(() => { fontsReady.then(() => { setReady(true); continueRender(handle); }); }, [handle]);
-  const {fontSize} = ready ? fitText({text, withinWidth: width, fontFamily: SERIF, fontWeight: 700}) : {fontSize: max};
-  return <div style={{fontFamily: SERIF, fontWeight: 700, fontSize: Math.min(max, fontSize * 0.97), lineHeight: 1.1, whiteSpace: 'nowrap', color: C.text}}>{text}</div>;
+  const {lines, size} = guestNameLayout(text, max, width, ready, wrap);
+  return <div style={{fontFamily: SERIF, fontWeight: 700, fontSize: size, lineHeight: 1.1, whiteSpace: 'nowrap', color: C.text}}>{lines.map((l, i) => <div key={i}>{l}</div>)}</div>;
 };
 
 // Arch-topped window used for imagery (replaces the old round photos).

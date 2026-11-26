@@ -1,8 +1,9 @@
 // Everything the editor app can change. The composition receives this as `cfg` and applies it before rendering.
-import {COPY, Guest, defaultGuest} from './scenes/data';
+import {COPY, Guest, Fit, defaultGuest} from './scenes/data';
 
 export type TemplateConfig = {
   guest: Guest;
+  fit?: Fit;                 // tinh chỉnh chung cho mọi thiệp
   talkLabel: string;
   talkLines: [string, string];
   time: string; weekday: string; date: string; welcome: string;
