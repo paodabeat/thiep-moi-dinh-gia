@@ -1,4 +1,5 @@
 import {sf} from '../sf';
+import {measureText} from '@remotion/layout-utils';
 import React from 'react';
 import {AbsoluteFill, Img} from 'remotion';
 import {C, SERIF, SAFE} from '../theme';
@@ -363,22 +364,40 @@ const Glow: React.FC<{y: number; w: number; h: number}> = ({y, w, h}) => (
   <div style={{position: 'absolute', left: 540 - w / 2, top: y - h / 2, width: w, height: h, borderRadius: '50%', background: 'radial-gradient(closest-side, rgba(250,244,234,0.55) 0%, rgba(250,244,234,0.35) 45%, rgba(250,244,234,0) 100%)', filter: 'blur(14px)'}} />
 );
 // danh xưng / họ tên / chức vụ as one centred group, so short or long names never overlap
-const GuestBlock: React.FC<{guest: Guest; cy: number; h: number; sizes: [number, number, number]; gaps: [number, number]}> = ({guest, cy, h, sizes, gaps}) => (
-  <div style={{position: 'absolute', left: SAFE - 40, right: SAFE - 40, top: cy - h / 2, height: h, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center'}}>
-    {guest.danhXung ? <div style={{fontSize: sizes[0], fontWeight: 500, color: C.mute, lineHeight: 1.1, marginBottom: gaps[0] + sizes[1] * 0.3}}>{guest.danhXung}</div> : null}
-    <GuestName text={guest.hoTen} max={sizes[1]} width={1080 - (SAFE - 40) * 2 - 20} />
-    {guest.chucVuDonVi ? <div style={{fontSize: sizes[2], fontWeight: 500, color: C.mute, lineHeight: 1.25, marginTop: gaps[1], maxWidth: 1080 - (SAFE - 40) * 2, textWrap: 'balance'} as React.CSSProperties}>{guest.chucVuDonVi}</div> : null}
-  </div>
-);
+// Khối khách mời: đặt từ trên xuống (luôn cách dòng "TRÂN TRỌNG KÍNH MỜI" một khoảng cố định), nội dung dài thì
+// chiếm thêm chỗ phía dưới; nếu vẫn vượt quá vùng [top, bottom] thì thu nhỏ đều cả khối cho vừa.
+const GuestBlock: React.FC<{guest: Guest; top: number; bottom: number; sizes: [number, number, number]; gaps: [number, number]}> = ({guest, top, bottom, sizes, gaps}) => {
+  const maxW = 1080 - (SAFE - 40) * 2;
+  const est = (k: number) => {
+    const [s0, s1, s2] = sizes.map((x) => x * k);
+    let h = s1 * 1.1;
+    if (guest.danhXung) h += s0 * 1.1 + gaps[0] + s1 * 0.3;
+    if (guest.chucVuDonVi) {
+      const w = measureText({text: guest.chucVuDonVi, fontFamily: 'Google Sans Flex', fontSize: s2, fontWeight: '500'}).width;
+      h += gaps[1] + Math.max(1, Math.ceil((w * 1.04) / maxW)) * s2 * 1.25;
+    }
+    return h;
+  };
+  let k = 1;
+  while (k > 0.7 && est(k) > bottom - top) k -= 0.02;
+  const [s0, s1, s2] = sizes.map((x) => x * k);
+  return (
+    <div style={{position: 'absolute', left: SAFE - 40, right: SAFE - 40, top, height: bottom - top, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', textAlign: 'center'}}>
+      {guest.danhXung ? <div style={{fontSize: s0, fontWeight: 500, color: C.mute, lineHeight: 1.1, marginBottom: gaps[0] + s1 * 0.3}}>{guest.danhXung}</div> : null}
+      <GuestName text={guest.hoTen} max={s1} width={maxW - 20} />
+      {guest.chucVuDonVi ? <div style={{fontSize: s2, fontWeight: 500, color: C.mute, lineHeight: 1.25, marginTop: gaps[1], maxWidth: maxW, textWrap: 'balance'} as React.CSSProperties}>{guest.chucVuDonVi}</div> : null}
+    </div>
+  );
+};
 const Shell: React.FC<{bare?: boolean; frame: React.ReactNode; children: React.ReactNode}> = ({bare, frame, children}) =>
   bare ? <AbsoluteFill style={{color: C.text, fontFamily: 'Google Sans Flex'}}>{children}</AbsoluteFill> : <Paper>{frame}{children}</Paper>;
 
 export const CardInvite: React.FC<{guest: Guest; variant?: 'A' | 'B'; bare?: boolean; noLogo?: boolean}> = ({guest, variant, bare, noLogo}) => (
   <Shell bare={bare} frame={<CardFrame variant={variant} />}>
-    <Glow y={360} w={640} h={300} />
-    <Center style={{filter: 'drop-shadow(0 0 10px #F7EFE2) drop-shadow(0 0 22px #F7EFE2) drop-shadow(0 0 40px rgba(247,239,226,0.9))'}} top={310}><BrandLogo name="vtv" height={96} style={{margin: '0 auto'}} /><div style={{height: 18}} /><Eyebrow size={25} color="#3A3B45">{COPY.vtvUnit[0]}<br />{COPY.vtvUnit[1]}</Eyebrow></Center>
-    <Center top={660}><Eyebrow size={30} color={C.mute}>{COPY.invite}</Eyebrow><div style={{height: 24}} /><Rule w={260} /></Center>
-    <GuestBlock guest={guest} cy={876} h={260} sizes={[34, 96, 32]} gaps={[4, 8]} />
+    <Glow y={300} w={640} h={300} />
+    <Center style={{filter: 'drop-shadow(0 0 10px #F7EFE2) drop-shadow(0 0 22px #F7EFE2) drop-shadow(0 0 40px rgba(247,239,226,0.9))'}} top={250}><BrandLogo name="vtv" height={96} style={{margin: '0 auto'}} /><div style={{height: 18}} /><Eyebrow size={25} color="#3A3B45">{COPY.vtvUnit[0]}<br />{COPY.vtvUnit[1]}</Eyebrow></Center>
+    <Center top={610}><Eyebrow size={30} color={C.mute}>{COPY.invite}</Eyebrow><div style={{height: 24}} /><Rule w={260} /></Center>
+    <GuestBlock guest={guest} top={714} bottom={1066} sizes={[34, 96, 32]} gaps={[4, 8]} />
     <Center top={1090}><Eyebrow size={26}>{COPY.lead} {COPY.eventTitle}</Eyebrow></Center>
     {!noLogo && <Center top={1155}><ShinyLogo width={600} style={{margin: '0 auto'}} /></Center>}
   </Shell>
@@ -453,10 +472,10 @@ const BottomBand: React.FC = () => (
 
 export const CardFinal: React.FC<{guest: Guest; variant?: 'A' | 'B'; bare?: boolean}> = ({guest, variant, bare}) => (
   <Shell bare={bare} frame={<CardFrame small variant={variant} />}>
-    <Glow y={235} w={600} h={250} />
-    <Center style={{filter: 'drop-shadow(0 0 10px #F7EFE2) drop-shadow(0 0 22px #F7EFE2) drop-shadow(0 0 40px rgba(247,239,226,0.9))'}} top={189}><BrandLogo name="vtv" height={72} style={{margin: '0 auto'}} /><div style={{height: 12}} /><Eyebrow size={22}>{COPY.vtvUnit[1]}</Eyebrow></Center>
-    <Center top={340}><Eyebrow size={24} color={C.mute}>{COPY.invite}</Eyebrow></Center>
-    <GuestBlock guest={guest} cy={469} h={200} sizes={[28, 84, 27]} gaps={[2, 6]} />
+    <Glow y={211} w={600} h={250} />
+    <Center style={{filter: 'drop-shadow(0 0 10px #F7EFE2) drop-shadow(0 0 22px #F7EFE2) drop-shadow(0 0 40px rgba(247,239,226,0.9))'}} top={165}><BrandLogo name="vtv" height={72} style={{margin: '0 auto'}} /><div style={{height: 12}} /><Eyebrow size={22}>{COPY.vtvUnit[1]}</Eyebrow></Center>
+    <Center top={316}><Eyebrow size={24} color={C.mute}>{COPY.invite}</Eyebrow></Center>
+    <GuestBlock guest={guest} top={370} bottom={616} sizes={[28, 84, 27]} gaps={[2, 6]} />
     <Center top={631}><Eyebrow size={21}>{COPY.lead} {COPY.eventTitle}</Eyebrow></Center>
     <Center top={663}><ShinyLogo width={485} start={515} style={{margin: '0 auto'}} /></Center>
     <Center top={893}><Eyebrow size={20}>{COPY.talkLabel}</Eyebrow><div style={{fontWeight: 700, fontSize: 47, lineHeight: 1.2, marginTop: 8, color: C.navy, whiteSpace: 'nowrap'}}>{CFG.talkLines[0]}<br />{CFG.talkLines[1]}</div></Center>
@@ -473,7 +492,8 @@ export const CardFinal: React.FC<{guest: Guest; variant?: 'A' | 'B'; bare?: bool
       <div style={{fontSize: 25, color: C.mute, marginTop: 6}}>{COPY.venue2}</div>
     </Center>
     <Center top={1338}><div style={{fontWeight: 700, fontSize: 25, letterSpacing: '0.14em', color: C.copper}}>{COPY.closing}</div></Center>
-    <div style={{position: 'absolute', left: SAFE - 30, right: SAFE - 30, top: 1412, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 38}}>
+    {/* lệch sang trái 70px và nhích lên để cách đều viền cong của vòng ảnh góc dưới phải */}
+    <div style={{position: 'absolute', left: SAFE - 30, right: SAFE - 30, top: 1398, paddingRight: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 38}}>
       <div style={{flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14}}>
         <div style={{padding: 10, background: '#FFFDF8', outline: `1.5px solid ${C.copper}`, outlineOffset: 6}}><Img src={sf(CFG.qrImage)} style={{width: 150, height: 150, display: 'block'}} /></div>
         <div style={{fontSize: 17, lineHeight: 1.3, color: C.mute, textAlign: 'center'}}>{lines(CFG.qrCaption).map((l, j) => <React.Fragment key={j}>{j ? <br /> : null}{l}</React.Fragment>)}</div>
