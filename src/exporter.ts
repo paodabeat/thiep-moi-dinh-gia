@@ -1,5 +1,7 @@
 // Xuất thiệp ngay trên trình duyệt (không cần máy chủ): MP4 bằng WebCodecs, PNG bằng canvas.
 import {renderMediaOnWeb, renderStillOnWeb} from '@remotion/web-renderer';
+import {Input, Output, BlobSource, BufferTarget, Mp4OutputFormat, EncodedPacketSink, EncodedVideoPacketSource, EncodedAudioPacketSource, ALL_FORMATS} from 'mediabunny';
+import {staticFile} from 'remotion';
 import {TemplateVideo, TemplateStill} from './remotion/Template';
 import {fontsReady, W, H} from './remotion/theme';
 import {FPS, DURATION} from './remotion/Video';
@@ -25,6 +27,49 @@ export const renderPreview = (cfg: TemplateConfig, frame: number, isStale: () =>
     const r = await renderStillOnWeb({composition: VIDEO_COMP, frame, inputProps: {cfg}, scale, licenseKey: LICENSE} as any);
     return URL.createObjectURL(await r.blob({format: 'jpeg', quality: 0.9} as any));
   });
+
+/* Nhạc nền giống nhau ở mọi thiệp nên được mã hoá sẵn (public/audio/mix.mp4) rồi ghép thẳng vào video,
+   không mã hoá âm thanh trên trình duyệt. Nhờ vậy chạy được cả trên Safari (không có AudioData / AudioEncoder). */
+let audioBlob: Promise<Blob> | null = null;
+const getAudio = () => (audioBlob ??= fetch(staticFile('audio/mix.mp4')).then((r) => { if (!r.ok) throw new Error('Không tải được nhạc nền'); return r.blob(); }));
+export const muxAudio = async (video: Blob): Promise<Blob> => {
+  const vIn = new Input({source: new BlobSource(video), formats: ALL_FORMATS});
+  const aIn = new Input({source: new BlobSource(await getAudio()), formats: ALL_FORMATS});
+  const vt = await vIn.getPrimaryVideoTrack(), at = await aIn.getPrimaryAudioTrack();
+  if (!vt) throw new Error('Video dựng ra không có hình');
+  const end = await vt.computeDuration();
+  const target = new BufferTarget();
+  const out = new Output({format: new Mp4OutputFormat({fastStart: 'in-memory'}), target});
+  const vs = new EncodedVideoPacketSource(vt.codec!);
+  out.addVideoTrack(vs, {frameRate: FPS});
+  const as = at ? new EncodedAudioPacketSource(at.codec!) : null;
+  if (as) out.addAudioTrack(as);
+  await out.start();
+  const vCfg = await vt.getDecoderConfig();
+  let first = true;
+  for await (const p of new EncodedPacketSink(vt).packets()) { await vs.add(p, first ? {decoderConfig: vCfg!} : undefined); first = false; }
+  vs.close();
+  if (as && at) {
+    const aCfg = await at.getDecoderConfig(); first = true;
+    for await (const p of new EncodedPacketSink(at).packets()) {
+      if (p.timestamp >= end) break;
+      await as.add(p, first ? {decoderConfig: aCfg!} : undefined); first = false;
+    }
+    as.close();
+  }
+  await out.finalize();
+  return new Blob([target.buffer!], {type: 'video/mp4'});
+};
+
+/** kiểm tra trình duyệt có dựng được video không (WebCodecs H.264) */
+export const videoSupport = async (): Promise<string | null> => {
+  if (typeof (globalThis as any).VideoEncoder === 'undefined' || typeof (globalThis as any).VideoFrame === 'undefined') return 'Trình duyệt này chưa hỗ trợ dựng video (thiếu WebCodecs).';
+  try {
+    const r = await VideoEncoder.isConfigSupported({codec: 'avc1.640033', width: W, height: H, bitrate: 8_000_000, framerate: FPS});
+    if (!r.supported) return 'Trình duyệt này không mã hoá được video H.264 ở khổ 1080 × 1920.';
+  } catch { return 'Không kiểm tra được khả năng dựng video của trình duyệt.'; }
+  return null;
+};
 
 export type Target = {kind: 'folder'; dir: FileSystemDirectoryHandle} | {kind: 'download'};
 export type JobState = {
@@ -65,13 +110,14 @@ export const runExport = async (o: {
       o.onState({stage: 'Đang dựng video MP4'});
       let idx = 0;
       const r = await renderMediaOnWeb({
-        composition: VIDEO_COMP, inputProps: {cfg}, licenseKey: LICENSE, signal: o.signal,
+        composition: VIDEO_COMP, inputProps: {cfg, silent: true}, licenseKey: LICENSE, signal: o.signal, muted: true,
         container: 'mp4', videoCodec: 'h264', videoBitrate: 'very-high',
         onFrame: (vf: VideoFrame) => { o.onFrame?.(vf, idx++); return vf; },
         // cập nhật khung xem trước thưa thôi (mỗi ~12 khung) để không làm chậm việc dựng
         onProgress: (p: {progress: number; renderedFrames: number}) => o.onState({progress: (o.png ? 0.04 : 0) + p.progress * (o.png ? 0.96 : 1), frame: Math.min(DURATION - 1, Math.floor(p.renderedFrames / 12) * 12)}),
       } as any);
-      const b = await r.getBlob();
+      o.onState({stage: 'Đang ghép nhạc nền'});
+      const b = await muxAudio(await r.getBlob());
       await write(o.target, `${base}.mp4`, b); o.onFile?.('mp4', b, g);
     }
     o.log(`✓ ${base}${o.mp4 ? '.mp4' : ''}${o.mp4 && o.png ? ' + ' : ''}${o.png ? '.png' : ''}  (${Math.round((performance.now() - t0) / 1000)} giây)`);

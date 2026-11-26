@@ -63,8 +63,8 @@ const Reveal: React.FC<{f: number; start: number; dur: number; end?: number; chi
   );
 };
 
-export const Invitation: React.FC<{guest?: Guest; layout?: 'v1' | 'v2'}> = ({guest = defaultGuest, layout = 'v2'}) => <LayoutCtx.Provider value={layout}><InvitationInner guest={guest} layout={layout} /></LayoutCtx.Provider>;
-const InvitationInner: React.FC<{guest: Guest; layout: 'v1' | 'v2'}> = ({guest, layout}) => {
+export const Invitation: React.FC<{guest?: Guest; layout?: 'v1' | 'v2'; silent?: boolean}> = ({guest = defaultGuest, layout = 'v2', silent}) => <LayoutCtx.Provider value={layout}><InvitationInner guest={guest} layout={layout} silent={silent} /></LayoutCtx.Provider>;
+const InvitationInner: React.FC<{guest: Guest; layout: 'v1' | 'v2'; silent?: boolean}> = ({guest, layout, silent}) => {
   const f = useCurrentFrame();
 
   /* ---------- match cut: compass needle = needle of the Đ, then the logo writes itself and settles ---------- */
@@ -87,7 +87,7 @@ const InvitationInner: React.FC<{guest: Guest; layout: 'v1' | 'v2'}> = ({guest, 
 
   return (
     <Paper>
-      <Audio src={sf('audio/mix.wav')} />
+      {!silent && <Audio src={sf('audio/mix.mp4')} />}
       {/* cảnh 1–2: la bàn 3D dùng video dựng sẵn (không phụ thuộc khách mời) – xuất trên trình duyệt không cần WebGL */}
       {f < WORLD_END && (BAKED_INTRO ? <Sequence durationInFrames={WORLD_END}><Video src={sf(BAKED_INTRO)} muted /></Sequence> : <WorldLayer />)}
       {fr > 0 && (

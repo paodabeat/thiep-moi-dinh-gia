@@ -6,7 +6,7 @@ import {SLOTS} from './remotion/assets';
 import {DEFAULT_CONFIG, TemplateConfig} from './remotion/config';
 import type {Guest} from './remotion/scenes/data';
 import {Work, cfgFor, guestLabel, saveLocal, exportSettings, importSettings, imageToDataUrl, downloadBlob} from './store';
-import {VIDEO_COMP, JobState, runExport, Target, renderPreview, enqueue} from './exporter';
+import {VIDEO_COMP, JobState, runExport, Target, renderPreview, enqueue, videoSupport} from './exporter';
 import {Icon} from './icons';
 import {DialogHost, ask, confirmBox} from './dialog';
 
@@ -465,6 +465,23 @@ const ExportModal: React.FC<{work: Work; job: JobState | null; setJob: React.Dis
   const start = async () => {
     if (!mp4 && !png) return say('Chọn ít nhất một định dạng', true);
     if (!list.length) return say('Danh sách khách mời đang trống', true);
+    let useMp4 = mp4;
+    if (mp4) {
+      const why = await videoSupport();
+      if (why) {
+        const r = await ask<'png' | null>({
+          title: 'Trình duyệt này chưa xuất được video', tone: 'warn', cancelValue: null,
+          message: <>
+            <p>{why}</p>
+            <p>Hãy mở trang bằng <b>Google Chrome</b> hoặc <b>Microsoft Edge</b> bản mới trên máy tính để xuất video MP4.</p>
+            {png && <p className="dim">Bạn vẫn có thể xuất ảnh PNG ngay trên trình duyệt này.</p>}
+          </>,
+          actions: png ? [{label: 'Đóng', value: null, kind: 'ghost'}, {label: 'Chỉ xuất ảnh PNG', value: 'png', icon: <Icon.Image />}] : [{label: 'Đã hiểu', value: null}],
+        });
+        if (r !== 'png') return;
+        useMp4 = false;
+      }
+    }
     if (!dir && list.length * per > 1) {
       const go = await ask<'go' | 'dir' | null>({
         title: `Tải ${list.length * per} file về thư mục Tải xuống`, tone: 'info', cancelValue: null,
@@ -483,7 +500,7 @@ const ExportModal: React.FC<{work: Work; job: JobState | null; setJob: React.Dis
     const log: string[] = [`Bắt đầu xuất ${list.length} thiệp${dir ? ` vào thư mục “${dir.name}”` : ' (lưu vào thư mục Tải xuống)'}…`];
     setJob({running: true, total: list.length, done: 0, current: '', stage: 'Đang chuẩn bị', progress: 0, frame: 0, guestIndex: 0, log});
     try {
-      await enqueue(() => runExport({cfg: work.cfg, guests: list, nums: list.map((g) => work.guests.indexOf(g) + 1), total: work.guests.length, mp4, png, target, signal: ac.signal,
+      await enqueue(() => runExport({cfg: work.cfg, guests: list, nums: list.map((g) => work.guests.indexOf(g) + 1), total: work.guests.length, mp4: useMp4, png, target, signal: ac.signal,
         onState: (s) => setJob((j) => (j ? {...j, ...s} : j)), log: (m) => setJob((j) => (j ? {...j, log: [...j.log, m]} : j)),
         // giữ lại file vừa xuất (ưu tiên video) để xem lại sau khi xong
         onFile: (kind, blob, g) => setResult((old) => {
